@@ -1,5 +1,5 @@
 # Environment variables
-.env
+# .env - INCLUDED in repo for easy deployment
 .env.local
 
 # Firebase credentials

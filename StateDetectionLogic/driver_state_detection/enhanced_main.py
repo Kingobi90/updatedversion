@@ -3,12 +3,16 @@ Enhanced Study Focus Detection System
 Integrates object detection, context analysis, adaptive thresholds, and pattern recognition
 """
 
+import os
+import socket
 import time
 import pprint
 import requests
 import cv2
 import mediapipe as mp
 import numpy as np
+from pathlib import Path
+from dotenv import load_dotenv
 
 try:
     from .attention_scorer import AttentionScorer as AttScorer
@@ -34,7 +38,32 @@ except ImportError:
     from server_reporter import ServerReporter
 
 
+def get_local_ip():
+    """Auto-detect local IP address."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+        return local_ip
+    except Exception:
+        return "127.0.0.1"
+
+
 def main():
+    # Load environment variables
+    env_path = Path(__file__).parent.parent / '.env'
+    load_dotenv(dotenv_path=env_path)
+    
+    # Get server URL from environment or auto-detect
+    SERVER_URL = os.getenv('SERVER_URL', '').strip()
+    if not SERVER_URL:
+        # Auto-detect: use local IP with default port
+        local_ip = get_local_ip()
+        port = os.getenv('PORT', '3000')
+        SERVER_URL = f"http://{local_ip}:{port}"
+        print(f"Auto-detected SERVER_URL: {SERVER_URL}")
+    
     args = get_args()
     
     # OpenCV optimization
@@ -145,9 +174,11 @@ def main():
     
     # Notify server to start session
     try:
-        requests.post("http://127.0.0.1:3000/session/start", json={}, timeout=0.5)
-    except Exception:
-        pass
+        requests.post(f"{SERVER_URL}/session/start", json={}, timeout=0.5)
+        print(f"Connected to server at {SERVER_URL}")
+    except Exception as e:
+        print(f"Warning: Could not connect to server at {SERVER_URL}: {e}")
+        print("Continuing in standalone mode...")
     
     start_time = time.perf_counter()
     frame_count = 0
@@ -341,9 +372,9 @@ def main():
                     # Send to server only if not already sent
                     if not last_distracted:
                         try:
-                            requests.post("http://127.0.0.1:3000/light",
+                            requests.post(f"{SERVER_URL}/light",
                                         json={"light_on": True}, timeout=0.75)
-                            requests.post("http://127.0.0.1:3000/session/edge",
+                            requests.post(f"{SERVER_URL}/session/edge",
                                         json={"distracted": True}, timeout=0.5)
                         except Exception:
                             pass
@@ -354,9 +385,9 @@ def main():
                 
                 if last_distracted:
                     try:
-                        requests.post("http://127.0.0.1:3000/light",
+                        requests.post(f"{SERVER_URL}/light",
                                     json={"light_on": False}, timeout=0.75)
-                        requests.post("http://127.0.0.1:3000/session/edge",
+                        requests.post(f"{SERVER_URL}/session/edge",
                                     json={"distracted": False}, timeout=0.5)
                     except Exception:
                         pass
@@ -382,10 +413,10 @@ def main():
             
             if last_face_detected:
                 try:
-                    requests.post("http://127.0.0.1:3000/light",
+                    requests.post(f"{SERVER_URL}/light",
                                 json={"light_on": True}, timeout=0.75)
                     if time.perf_counter() - start_time >= 1.0:
-                        requests.post("http://127.0.0.1:3000/session/edge",
+                        requests.post(f"{SERVER_URL}/session/edge",
                                     json={"distracted": True}, timeout=0.5)
                 except Exception:
                     pass
@@ -393,10 +424,10 @@ def main():
         
         if face_present_state and not last_face_detected:
             try:
-                requests.post("http://127.0.0.1:3000/light",
+                requests.post(f"{SERVER_URL}/light",
                             json={"light_on": False}, timeout=0.75)
                 if time.perf_counter() - start_time >= 1.0:
-                    requests.post("http://127.0.0.1:3000/session/edge",
+                    requests.post(f"{SERVER_URL}/session/edge",
                                 json={"distracted": False}, timeout=0.5)
             except Exception:
                 pass
@@ -430,9 +461,10 @@ def main():
     
     # Finalize session
     try:
-        requests.post("http://127.0.0.1:3000/session/stop", json={}, timeout=0.5)
-    except Exception:
-        pass
+        requests.post(f"{SERVER_URL}/session/stop", json={}, timeout=0.5)
+        print(f"Session stopped on server at {SERVER_URL}")
+    except Exception as e:
+        print(f"Warning: Could not notify server of session stop: {e}")
     
     print(f"\nSession ended. Processed {frame_count} frames.")
     
