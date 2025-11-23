@@ -224,7 +224,7 @@ def session_stats():
 @app.route('/start', methods=['POST'])
 def start():
     """
-    Starts the driver_state_detection.main process if not already running.
+    Starts the driver_state_detection.enhanced_main process if not already running.
     Returns JSON with status and PID if started successfully.
     """
     global proc, light_on_state, session_username, session_username_lock
@@ -235,7 +235,7 @@ def start():
         return jsonify({"status": "already running", "pid": proc.pid})
 
     python_exec = sys.executable
-    cmd = [python_exec, "-m", "driver_state_detection.main"]
+    cmd = [python_exec, "-m", "driver_state_detection.enhanced_main"]
     # Minimal log via @before_request already prints the endpoint
 
     # Optionally accept JSON {"username": "..."} and bind it so
