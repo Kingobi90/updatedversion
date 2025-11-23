@@ -139,17 +139,17 @@
 
 **Content:**
 **Productive Activities (No Alert):**
-1. 📖 Reading Book - book detected + reading angle
-2. ✍️ Taking Notes - head down, no objects
-3. 💻 Typing - laptop detected
-4. 🎯 Focused Studying - normal posture
-5. 💧 Drinking Water - bottle/cup, brief
+1. Reading Book - book detected + reading angle
+2. Taking Notes - head down, no objects
+3. Typing - laptop detected
+4. Focused Studying - normal posture
+5. Drinking Water - bottle/cup, brief
 
 **Distractions (Alert Triggered):**
-6. 📱 Phone Usage - phone detected (90% severity)
-7. 👀 Looking Away - sustained gaze deviation (50%)
-8. 🚶 Left Desk - no face detected (80%)
-9. 💭 Thinking Too Long - extended look-away (30%)
+6. Phone Usage - phone detected (90% severity)
+7. Looking Away - sustained gaze deviation (50%)
+8. Left Desk - no face detected (80%)
+9. Thinking Too Long - extended look-away (30%)
 
 **[PLACEHOLDER IMAGE: Screenshots of each activity type being detected]**
 **[PLACEHOLDER IMAGE: Severity level visualization]**
@@ -172,8 +172,8 @@
 | **Context Awareness** | No | Yes | Smart |
 
 **Real-World Example:**
-- **Old System:** 30-min reading session → 30 min "distracted" ❌
-- **New System:** 30-min reading session → 30 min "productive" ✅
+- **Old System:** 30-min reading session → 30 min "distracted" 
+- **New System:** 30-min reading session → 30 min "productive" 
 
 **[PLACEHOLDER IMAGE: Bar chart comparing metrics]**
 
@@ -282,7 +282,7 @@ Focus Score = (1 - distracted_time / total_time) × 100
 **Example Session (60 minutes):**
 - Reading book: 40 min → Productive ✓
 - Taking notes: 15 min → Productive ✓
-- Phone usage: 3 min → Distracted ❌
+- Phone usage: 3 min → Distracted 
 - Drinking water: 2 min → Neutral ✓
 
 **Calculation:**
