@@ -204,10 +204,22 @@ class SessionServerStore:
         return elapsed_ms, focus_score
 
     # ------------------ Distracted flag transitions ------------------
-    def mark_distracted(self, session_id: str, start_at: Optional[datetime] = None) -> None:
+    def mark_distracted(self, session_id: str, start_at: Optional[datetime] = None, 
+                       activity: str = "unknown", severity: float = 0.5) -> None:
         """Record the start of a distracted interval (false -> true edge).
 
         If an interval is already open, this is a no-op.
+        
+        Parameters
+        ----------
+        session_id : str
+            The session ID
+        start_at : datetime, optional
+            When the distraction started (defaults to now)
+        activity : str, optional
+            The activity type (e.g., "phone_distraction", "looking_away")
+        severity : float, optional
+            Severity level 0.0-1.0
         """
         start_at = start_at or _utcnow()
         session_ref = self._db.collection(SESSION_COLLECTION).document(session_id)
@@ -223,6 +235,8 @@ class SessionServerStore:
             session_ref.update(
                 {
                     "currentIntervalStart": start_at,
+                    "currentActivity": activity,
+                    "currentSeverity": severity,
                     "lastUpdated": firestore.SERVER_TIMESTAMP,
                 }
             )
@@ -253,7 +267,11 @@ class SessionServerStore:
         duration_ms = int((end_at - start_at).total_seconds() * 1000)
         idx = int(data.get("intervalCount", 0) or 0) + 1
 
-        # Create interval document
+        # Get activity and severity from current interval
+        activity = data.get("currentActivity", "unknown")
+        severity = data.get("currentSeverity", 0.5)
+        
+        # Create interval document with activity and severity
         interval_ref = intervals_col.document()
         interval_ref.set(
             {
@@ -261,6 +279,8 @@ class SessionServerStore:
                 "endAt": end_at,
                 "durationMs": duration_ms,
                 "idx": idx,
+                "activity": activity,
+                "severity": severity,
                 "source": "state-detector",
                 "createdAt": firestore.SERVER_TIMESTAMP,
             }
@@ -272,6 +292,8 @@ class SessionServerStore:
                 "distractedTotalMs": firestore.Increment(duration_ms),
                 "intervalCount": firestore.Increment(1),
                 "currentIntervalStart": firestore.DELETE_FIELD,
+                "currentActivity": firestore.DELETE_FIELD,
+                "currentSeverity": firestore.DELETE_FIELD,
                 "lastUpdated": firestore.SERVER_TIMESTAMP,
             }
         )

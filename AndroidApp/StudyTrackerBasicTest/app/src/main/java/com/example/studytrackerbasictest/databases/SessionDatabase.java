@@ -55,7 +55,13 @@ public class SessionDatabase {
 
             db.collection("sessions")
                     .document(finalSessionId)
-                    .set(data, SetOptions.merge());
+                    .set(data, SetOptions.merge())
+                    .addOnSuccessListener(aVoid -> {
+                        android.util.Log.d("SessionDatabase", "✅ Session saved to Firebase: " + finalSessionId);
+                    })
+                    .addOnFailureListener(e -> {
+                        android.util.Log.e("SessionDatabase", "❌ Failed to save session: " + e.getMessage());
+                    });
         });
     }
 

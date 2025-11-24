@@ -98,24 +98,16 @@ def session_start():
     """
     global session_store, session_id, session_username, session_username_lock
     body = request.get_json(silent=True) or {}
-    # user_id = body.get("userId")
+    user_id = body.get("userId")
     username = body.get("username")
-    # If the client did not send username here, fall back to a username previously
-    # bound via POST /start (if any). That value is set in /start when a client
-    # includes {"username": "..."} in its request body.
-    if username is None:
-        try:
-            with session_username_lock:
-                username = session_username
-        except Exception:
-            username = None
     try:
         if session_store is None or session_id is None:
             store = SessionServerStore()
-            sid = store.start_session(username=username)
+            sid = store.start_session(user_id=user_id, username=username)
             session_store, session_id = store, sid
-            app.logger.info(f"Created document in Firebase: {session_id}")
-            # Minimal log via @before_request already prints the endpoint
+            session_username = username
+            app.logger.info(f"Created Firebase document: {session_id}")
+        
         return jsonify({"status": "ok", "sessionId": session_id})
     except Exception as e:
         app.logger.warning(f"/session/start skipped: {e}")
@@ -126,12 +118,15 @@ def session_start():
 def session_edge():
     """Record a distracted/focused edge into Firestore.
 
-    JSON: {"distracted": bool}
+    JSON: {"distracted": bool, "activity": str (optional), "severity": float (optional)}
     Lazily creates a session if one doesn't exist.
     """
     global session_store, session_id
     data = request.get_json(silent=True) or {}
     distracted = bool(data.get("distracted", False))
+    activity = data.get("activity", "unknown")
+    severity = data.get("severity", 0.5)
+    
     try:
         if session_store is None or session_id is None:
             store = SessionServerStore()
@@ -140,10 +135,18 @@ def session_edge():
             # Minimal log via @before_request already prints the endpoint
 
         if distracted:
-            session_store.mark_distracted(session_id)
+            session_store.mark_distracted(session_id, activity=activity, severity=severity)
         else:
             session_store.mark_focused(session_id)
-        return jsonify({"status": "ok", "sessionId": session_id})
+        
+        # Return activity and severity for app to display
+        return jsonify({
+            "status": "ok", 
+            "sessionId": session_id,
+            "distracted": distracted,
+            "activity": activity,
+            "severity": severity
+        })
     except Exception as e:
         app.logger.warning(f"/session/edge skipped: {e}")
         return jsonify({"status": "skipped", "error": str(e)}), 200
@@ -159,8 +162,11 @@ def session_stop():
     global session_store, session_id
     try:
         if session_store and session_id:
-            elapsed_ms, focus = session_store.stop_session(session_id)
-            resp = {"status": "ok", "sessionId": session_id, "elapsedMs": elapsed_ms, "focusScore": focus}
+            result = session_store.stop_session(session_id)
+            elapsed_ms, focus_score = result  # Unpack the tuple
+            resp = {"status": "ok", "sessionId": session_id, 
+                   "elapsedMs": elapsed_ms, 
+                   "focusScore": focus_score}
         else:
             resp = {"status": "noop"}
     except Exception as e:
@@ -173,48 +179,46 @@ def session_stop():
 
 @app.route('/session/stats', methods=['GET'])
 def session_stats():
-    """Get real-time session statistics including current focus score."""
+    """Get real-time session statistics from Firebase."""
     global session_store, session_id
     try:
         if not session_store or not session_id:
             return jsonify({"status": "no_active_session"})
         
-        # Get current session data from Firestore
-        doc = session_store.db.collection(session_store.collection_name).document(session_id).get()
-        if not doc.exists:
+        # Get stats from Firebase
+        from datetime import datetime, timezone
+        from firebase_admin import firestore as admin_firestore
+        
+        db = admin_firestore.client()
+        session_ref = db.collection("sessionServer").document(session_id)
+        snap = session_ref.get()
+        
+        if not snap.exists:
             return jsonify({"status": "session_not_found"})
         
-        data = doc.to_dict()
+        data = snap.to_dict()
         started_at = data.get("startedAt")
         distracted_total_ms = data.get("distractedTotalMs", 0)
         interval_count = data.get("intervalCount", 0)
         
-        # Calculate elapsed time
-        from datetime import datetime, timezone
+        # Calculate current elapsed time
         now = datetime.now(timezone.utc)
-        if started_at:
-            elapsed_ms = int((now - started_at).total_seconds() * 1000)
-        else:
-            elapsed_ms = 0
+        elapsed_ms = int((now - started_at).total_seconds() * 1000) if started_at else 0
         
-        # Calculate current focus score
-        if elapsed_ms > 0:
-            current_focus_score = ((1 - float(distracted_total_ms) / elapsed_ms) * 100.0)
-        else:
-            current_focus_score = 100.0
-        
-        # Calculate focused time
-        focused_ms = elapsed_ms - distracted_total_ms
+        # Calculate focus score
+        focus_score = ((1 - float(distracted_total_ms) / elapsed_ms) * 100.0) if elapsed_ms > 0 else 100.0
         
         return jsonify({
             "status": "ok",
             "sessionId": session_id,
             "elapsedMs": elapsed_ms,
             "distractedTotalMs": distracted_total_ms,
-            "focusedMs": focused_ms,
-            "currentFocusScore": round(current_focus_score, 1),
+            "focusedMs": elapsed_ms - distracted_total_ms,
+            "currentFocusScore": round(focus_score, 1),
             "distractionCount": interval_count,
-            "isDistracted": data.get("currentIntervalStart") is not None
+            "isDistracted": data.get("currentIntervalStart") is not None,
+            "currentActivity": data.get("currentActivity", "unknown"),
+            "currentSeverity": data.get("currentSeverity", 0.0)
         })
     except Exception as e:
         app.logger.error(f"Error getting session stats: {e}")
@@ -300,9 +304,11 @@ def stop():
         resp = {"status": "not running"}
         if session_store and session_id:
             try:
-                elapsed_ms, focus = session_store.stop_session(session_id)
-                resp.update({"sessionId": session_id, "elapsedMs": elapsed_ms, "focusScore": focus})
+                result = session_store.stop_session(session_id)
+                elapsed_ms, focus_score = result  # Unpack the tuple
+                resp.update({"sessionId": session_id, "elapsedMs": elapsed_ms, "focusScore": focus_score})
             except Exception as e:
+                app.logger.error(f"Error stopping session: {e}")
                 resp.update({"sessionFinalizeError": str(e)})
             finally:
                 session_store = None
@@ -328,9 +334,11 @@ def stop():
     # Always finalize the current focus-scoring session after stopping the process
     if session_store and session_id:
         try:
-            elapsed_ms, focus = session_store.stop_session(session_id)
-            resp = {"status": "stopped", "sessionId": session_id, "elapsedMs": elapsed_ms, "focusScore": focus}
+            result = session_store.stop_session(session_id)
+            elapsed_ms, focus_score = result  # Unpack the tuple
+            resp = {"status": "stopped", "sessionId": session_id, "elapsedMs": elapsed_ms, "focusScore": focus_score}
         except Exception as e:
+            app.logger.error(f"Error stopping session: {e}")
             resp = {"status": "stopped", "sessionFinalizeError": str(e)}
         finally:
             session_store = None

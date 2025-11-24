@@ -173,9 +173,14 @@ public class HomeFragment extends Fragment {
 
             @Override public void onResponse(Call call, Response response) throws IOException {
                 try {
-                    JSONObject json = new JSONObject(response.body().string());
+                    String responseBody = response.body().string();
+                    Log.d("HomeFragment", "Server response: " + responseBody);
+                    JSONObject json = new JSONObject(responseBody);
                     currentSessionId = json.optString("sessionId", null);
-                } catch (Exception ignored) {}
+                    Log.d("HomeFragment", "✅ Session started with ID: " + currentSessionId);
+                } catch (Exception e) {
+                    Log.e("HomeFragment", "❌ Failed to parse session start response: " + e.getMessage());
+                }
             }
         });
     }
@@ -198,11 +203,18 @@ public class HomeFragment extends Fragment {
                 Double focusScore = null;
 
                 try {
-                    JSONObject json = new JSONObject(response.body().string());
-                    if (json.has("focusScore"))
+                    String responseBody = response.body().string();
+                    Log.d("HomeFragment", "Stop response: " + responseBody);
+                    JSONObject json = new JSONObject(responseBody);
+                    if (json.has("focusScore")) {
                         focusScore = json.getDouble("focusScore");
-                } catch (Exception ignored) {}
+                        Log.d("HomeFragment", "✅ Focus score received: " + focusScore);
+                    }
+                } catch (Exception e) {
+                    Log.e("HomeFragment", "❌ Failed to parse stop response: " + e.getMessage());
+                }
 
+                Log.d("HomeFragment", "Saving session - ID: " + currentSessionId + ", User: " + username + ", Score: " + focusScore);
                 SessionDatabase db = new SessionDatabase();
                 db.saveSession(currentSessionId, date, duration, username, focusScore);
 
