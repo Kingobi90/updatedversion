@@ -296,7 +296,7 @@ def main():
                 )
             
             # Original scoring (for backward compatibility)
-            asleep, looking_away, distracted = Scorer.eval_scores(
+            asleep, looking_away_old, distracted_old = Scorer.eval_scores(
                 t_now=t_now,
                 ear_score=ear,
                 gaze_score=gaze,
@@ -304,6 +304,21 @@ def main():
                 head_pitch=pitch,
                 head_yaw=yaw,
             )
+            
+            # Override context analysis if asleep or old system detects distraction
+            if asleep:
+                activity = "asleep"
+                is_distracted = True
+                distraction_severity = 0.95
+            elif looking_away_old and not is_distracted:
+                # Old system caught looking away that new system missed
+                activity = ActivityType.LOOKING_AWAY
+                is_distracted = True
+                distraction_severity = 0.6
+            elif distracted_old and not is_distracted and activity not in [ActivityType.READING_BOOK, ActivityType.TAKING_NOTES, ActivityType.TYPING]:
+                # Old system caught bad pose that new system missed (but not during productive activities)
+                is_distracted = True
+                distraction_severity = 0.5
             
             # Display metrics
             if ear is not None:
@@ -351,34 +366,92 @@ def main():
                 cv2.putText(frame, "ASLEEP!", (10, 300),
                            cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1, cv2.LINE_AA)
             
-            if looking_away:
+            if looking_away_old:
                 cv2.putText(frame, "LOOKING AWAY!", (10, 320),
                            cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1, cv2.LINE_AA)
             
             # NEW: Context-aware distraction handling
-            if is_distracted and activity != ActivityType.THINKING:
-                # Ignore brief distractions (micro-breaks)
+            # Exclude thinking and drinking water from distraction alerts
+            if is_distracted and activity not in [ActivityType.THINKING, ActivityType.DRINKING_WATER]:
+                # Start distraction timer
                 if distraction_start_time is None:
                     distraction_start_time = t_now
                 
                 distraction_duration = t_now - distraction_start_time
                 
-                # Only flag if sustained (> 5 seconds)
-                if distraction_duration > 5.0:
-                    severity_text = f"Distracted ({distraction_severity:.0%})"
+                # Phone detection OR asleep: IMMEDIATE alert (no delay)
+                if activity == ActivityType.PHONE_DISTRACTION:
+                    severity_text = f"PHONE DETECTED - Distracted!"
                     cv2.putText(frame, severity_text, (10, 340),
-                               cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1, cv2.LINE_AA)
+                               cv2.FONT_HERSHEY_PLAIN, 1.5, (0, 0, 255), 2, cv2.LINE_AA)
                     
-                    # Send to server only if not already sent
+                    # Send to server immediately
                     if not last_distracted:
                         try:
                             requests.post(f"{SERVER_URL}/light",
                                         json={"light_on": True}, timeout=0.75)
                             requests.post(f"{SERVER_URL}/session/edge",
-                                        json={"distracted": True}, timeout=0.5)
+                                        json={"distracted": True, "activity": activity, "severity": distraction_severity}, timeout=0.5)
                         except Exception:
                             pass
                         last_distracted = True
+                
+                elif activity == "asleep":
+                    severity_text = f"ASLEEP - Distracted!"
+                    cv2.putText(frame, severity_text, (10, 340),
+                               cv2.FONT_HERSHEY_PLAIN, 1.5, (0, 0, 255), 2, cv2.LINE_AA)
+                    
+                    # Send to server immediately
+                    if not last_distracted:
+                        try:
+                            requests.post(f"{SERVER_URL}/light",
+                                        json={"light_on": True}, timeout=0.75)
+                            requests.post(f"{SERVER_URL}/session/edge",
+                                        json={"distracted": True, "activity": activity, "severity": distraction_severity}, timeout=0.5)
+                        except Exception:
+                            pass
+                        last_distracted = True
+                
+                # Looking away: Flag after 15 seconds
+                elif activity == ActivityType.LOOKING_AWAY:
+                    if distraction_duration > 15.0:
+                        severity_text = f"Looking Away {int(distraction_duration)}s - Distracted!"
+                        cv2.putText(frame, severity_text, (10, 340),
+                                   cv2.FONT_HERSHEY_PLAIN, 1.5, (0, 0, 255), 2, cv2.LINE_AA)
+                        
+                        # Send to server only if not already sent
+                        if not last_distracted:
+                            try:
+                                requests.post(f"{SERVER_URL}/light",
+                                            json={"light_on": True}, timeout=0.75)
+                                requests.post(f"{SERVER_URL}/session/edge",
+                                            json={"distracted": True, "activity": activity, "severity": distraction_severity}, timeout=0.5)
+                            except Exception:
+                                pass
+                            last_distracted = True
+                    else:
+                        # Show countdown
+                        remaining = 15.0 - distraction_duration
+                        cv2.putText(frame, f"Looking Away ({remaining:.1f}s until alert)", (10, 340),
+                                   cv2.FONT_HERSHEY_PLAIN, 1, (255, 165, 0), 1, cv2.LINE_AA)
+                
+                # Other distractions: Flag after 5 seconds (original behavior)
+                else:
+                    if distraction_duration > 5.0:
+                        severity_text = f"Distracted ({distraction_severity:.0%})"
+                        cv2.putText(frame, severity_text, (10, 340),
+                                   cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1, cv2.LINE_AA)
+                        
+                        # Send to server only if not already sent
+                        if not last_distracted:
+                            try:
+                                requests.post(f"{SERVER_URL}/light",
+                                            json={"light_on": True}, timeout=0.75)
+                                requests.post(f"{SERVER_URL}/session/edge",
+                                            json={"distracted": True, "activity": activity, "severity": distraction_severity}, timeout=0.5)
+                            except Exception:
+                                pass
+                            last_distracted = True
             else:
                 # Reset distraction timer
                 distraction_start_time = None

@@ -223,8 +223,12 @@ class ContextAnalyzer:
             return True, 0.8
         
         # Looking away is moderate distraction
+        # Count consecutive looking away frames to detect sustained distraction
         if activity == ActivityType.LOOKING_AWAY:
-            return True, 0.5
+            recent_looking_away = sum(1 for a in self.activity_history if a == ActivityType.LOOKING_AWAY)
+            # If looking away for more than 15 frames (~0.5s at 30fps), flag as distracted
+            # The main loop will handle the 15-second sustained check
+            return True, 0.6
         
         # Unknown activity is low severity
         return True, 0.3

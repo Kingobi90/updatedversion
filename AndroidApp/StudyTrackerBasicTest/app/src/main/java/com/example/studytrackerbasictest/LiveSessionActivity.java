@@ -195,11 +195,15 @@ public class LiveSessionActivity extends AppCompatActivity {
                         long focusedMs = json.optLong("focusedMs", 0);
                         long elapsedMs = json.optLong("elapsedMs", 0);
                         boolean isDistracted = json.optBoolean("isDistracted", false);
+                        String currentActivity = json.optString("currentActivity", "unknown");
+                        double currentSeverity = json.optDouble("currentSeverity", 0.5);
 
                         runOnUiThread(() -> {
                             updateUI(focusScore, focusedMs, elapsedMs);
                             if (isDistracted) {
-                                showDistractionWarning();
+                                showDistractionWarning(currentActivity, currentSeverity);
+                            } else {
+                                hideDistractionWarning();
                             }
                         });
                     }
@@ -248,15 +252,73 @@ public class LiveSessionActivity extends AppCompatActivity {
         focusRing.invalidate();
     }
 
-    private void showDistractionWarning() {
+    private void showDistractionWarning(String activity, double severity) {
         distractionWarning.setVisibility(View.VISIBLE);
-        warningText.setText("⚠️ FOCUS!\nYou're looking away from your work.\nGet back to studying!");
+        
+        // Customize message based on activity type
+        String emoji;
+        String title;
+        String message;
+        
+        switch (activity) {
+            case "phone_distraction":
+                emoji = "📱";
+                title = "PHONE DETECTED!";
+                message = "Put your phone away immediately!\nFocus on your studies!";
+                // Vibrate for phone detection
+                android.os.Vibrator vibrator = (android.os.Vibrator) getSystemService(VIBRATOR_SERVICE);
+                if (vibrator != null && vibrator.hasVibrator()) {
+                    vibrator.vibrate(500);
+                }
+                break;
+            case "asleep":
+                emoji = "😴";
+                title = "WAKE UP!";
+                message = "You're falling asleep!\nTake a break or splash water on your face!";
+                break;
+            case "looking_away":
+                emoji = "👀";
+                title = "LOOKING AWAY!";
+                message = "You've been distracted for too long.\nRefocus on your work!";
+                break;
+            case "face_missing":
+                emoji = "❌";
+                title = "WHERE ARE YOU?";
+                message = "Face not detected!\nReturn to your study desk!";
+                break;
+            default:
+                emoji = "⚠️";
+                title = "DISTRACTED!";
+                message = "You're not focused.\nGet back to studying!";
+                break;
+        }
+        
+        // Set severity-based color
+        int backgroundColor;
+        if (severity >= 0.8) {
+            backgroundColor = Color.parseColor("#D32F2F"); // Dark red for critical
+        } else if (severity >= 0.6) {
+            backgroundColor = Color.parseColor("#F57C00"); // Orange for moderate
+        } else {
+            backgroundColor = Color.parseColor("#FFA726"); // Light orange for minor
+        }
+        
+        distractionWarning.setCardBackgroundColor(backgroundColor);
+        warningText.setText(emoji + " " + title + "\n" + message);
 
-        // Auto-dismiss after 7 seconds
+        // Don't auto-dismiss for critical distractions (phone, asleep)
         warningHandler.removeCallbacksAndMessages(null);
-        warningHandler.postDelayed(() -> {
-            distractionWarning.setVisibility(View.GONE);
-        }, WARNING_DISMISS_MS);
+        if (severity < 0.8) {
+            warningHandler.postDelayed(() -> {
+                distractionWarning.setVisibility(View.GONE);
+            }, WARNING_DISMISS_MS);
+        }
+        // For critical distractions, keep showing until user refocuses
+    }
+    
+    private void hideDistractionWarning() {
+        warningHandler.removeCallbacksAndMessages(null);
+        distractionWarning.setVisibility(View.GONE);
     }
 
     @Override

@@ -65,6 +65,8 @@ public class MainActivity extends AppCompatActivity {
                 selected = new AnalyticsFragment();
             } else if (id == R.id.nav_countdown) {
                 selected = new CountdownFragment();
+            } else if (id == R.id.nav_untimed) {
+                selected = new UntimedSessionFragment();
             } else if (id == R.id.nav_settings) {
                 selected = new SettingsFragment();
             }
