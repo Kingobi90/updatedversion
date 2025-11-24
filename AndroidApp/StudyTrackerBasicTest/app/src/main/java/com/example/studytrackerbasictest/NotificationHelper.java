@@ -102,7 +102,7 @@ public class NotificationHelper {
 
     public static void showSessionComplete(Context context, String duration, Double focusScore) {
         String scoreText = focusScore != null
-                ? String.format("Focus: %.0f%%", focusScore * 100)
+                ? String.format("Focus: %.0f%%", focusScore)
                 : "Focus: N/A";
 
         Intent intent = new Intent(context, MainActivity.class);

@@ -43,7 +43,6 @@
         android:textSize="72sp"
         android:textStyle="bold"
         android:textColor="@color/green_primary"
-        android:format="00:00"
         app:layout_constraintTop_toBottomOf="@id/descriptionText"
         app:layout_constraintBottom_toTopOf="@id/statusText"
         app:layout_constraintStart_toStartOf="parent"

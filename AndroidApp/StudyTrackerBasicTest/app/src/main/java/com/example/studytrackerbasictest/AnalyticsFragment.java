@@ -228,7 +228,7 @@ public class AnalyticsFragment extends Fragment {
 
             Object fs = session.get("focusScore");
             if (fs != null) {
-                totalFocus += ((Number) fs).doubleValue() * 100;
+                totalFocus += ((Number) fs).doubleValue();
                 focusCount++;
             }
         }
@@ -273,7 +273,7 @@ public class AnalyticsFragment extends Fragment {
                 int group = hour / 4; // 0-5 representing 6 groups
                 Object fs = session.get("focusScore");
                 if (fs != null) {
-                    double score = ((Number) fs).doubleValue() * 100;
+                    double score = ((Number) fs).doubleValue();
                     if (!groupedFocus.containsKey(group)) {
                         groupedFocus.put(group, new ArrayList<>());
                     }
@@ -353,7 +353,7 @@ public class AnalyticsFragment extends Fragment {
             Map<String, String> child = new HashMap<>();
             Object fs = session.get("focusScore");
             String focusStr = fs != null ? 
-                String.format(Locale.getDefault(), "%.0f%%", ((Number) fs).doubleValue() * 100) : "N/A";
+                String.format(Locale.getDefault(), "%.0f%%", ((Number) fs).doubleValue()) : "N/A";
             child.put("details", "Focus Score: " + focusStr);
             children.add(child);
             childData.add(children);

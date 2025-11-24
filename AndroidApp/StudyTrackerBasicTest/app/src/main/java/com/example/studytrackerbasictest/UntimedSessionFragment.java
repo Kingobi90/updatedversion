@@ -43,7 +43,7 @@ public class UntimedSessionFragment extends Fragment {
     private String currentSessionId = null;
 
     private final OkHttpClient client = new OkHttpClient();
-    private static String BASE_URL = "http://172.20.10.4:3000";
+    private static String BASE_URL = "http://10.0.2.2:3000";
 
     static final String PREFS_NAME = "AppPrefs";
     static final String KEY_IP = "server_ip";

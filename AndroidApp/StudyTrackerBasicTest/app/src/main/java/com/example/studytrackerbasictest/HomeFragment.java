@@ -35,7 +35,7 @@ import okhttp3.WebSocketListener;
 public class HomeFragment extends Fragment {
 
     OkHttpClient client;
-    String BASE_URL = "http://172.20.10.4:3000";
+    String BASE_URL = "http://10.0.2.2:3000";
 
     TextView welcomeText, timerText, statusText, todayTimeValue, totalSessionsValue;
     Button toggleBtn, viewStatsBtn, achievementsBtn;
